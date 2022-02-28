@@ -3,40 +3,25 @@
 # pylint: disable=C0103,W0621,W0702,W0703
 
 """
-ACF plot for ensembles
+Plot ensemble time series
 ~~~~~~~
-Python script to create plots
 """
 
-import statsmodels.api as sm
 from matplotlib import pyplot as plt
 from os.path import join
 import xarray as xr
-import seaborn as sns
-import numpy as np
-import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 
-variable = 'TS'
-model = f'f.e11.FAMIPC5CN.f09_f09.historical.toga{{}}.cam.h0.{variable}.188001-200512'
-path_to = join('data', f"{model.format('')}")
-fn = join(path_to, 'TS.nc')
-data = xr.open_dataset(fn)[variable]
+def plot_ens(x):
+    if x.name.startswith('PS'):
+        x = x / 100
+    m = x.mean(dim=['lat', 'lon'])
+    p = m.plot(row='model', x='time')
+    p.fig.set_size_inches(30, 30)
+    p.fig.savefig(f'figures/plot_ens_{x.name}.pdf', bbox_inches='tight')
+    plt.close(p.fig)
 
-m = data.mean(dim=['lat', 'lon'])
 
-m.plot(row='model', x='time')
-plt.show()
-
-y = m.to_numpy()
-
-scaler = StandardScaler()
-scaler.fit(y)
-z = scaler.transform(y)
-
-pca = PCA(n_components=10)
-pca.fit(z)
-x_new = pca.transform(z)
-for i in pca.explained_variance_ratio_ * 100:
-    print(i)
+model = 'f.e11.FAMIPC5CN'
+dt = xr.open_dataset(f'/mnt/data/CESM1{model}/input/VARS.nc')
+for _, d in dt.data_vars.items():
+    plot_ens(d)

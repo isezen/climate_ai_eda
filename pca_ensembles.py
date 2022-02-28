@@ -3,20 +3,20 @@
 # pylint: disable=C0103,W0621,W0702,W0703
 
 """
-ACF plot for ensembles
+PCA analysis for ensembles
 ~~~~~~~
-Python script to create plots
 """
 
-import statsmodels.api as sm
 from matplotlib import pyplot as plt
+
 from os.path import join
 import xarray as xr
-import seaborn as sns
 import numpy as np
-import pandas as pd
+import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from matplotlib import pyplot as plt
+import pandas as pd
 
 def myplot(score,coeff,labels=None):
     xs = score[:,0]
@@ -25,7 +25,6 @@ def myplot(score,coeff,labels=None):
     scalex = 1.0/(xs.max() - xs.min())
     scaley = 1.0/(ys.max() - ys.min())
     plt.plot(0)
-    # plt.scatter(xs * scalex, ys * scaley)
     for i in range(n):
         plt.arrow(0, 0, coeff[i,0], coeff[i,1],color = 'r',alpha = 0.5)
         if labels is None:
@@ -39,19 +38,9 @@ def myplot(score,coeff,labels=None):
     plt.grid()
 
 variable = 'TS'
-model = f'f.e11.FAMIPC5CN.f09_f09.historical.toga{{}}.cam.h0.{variable}.188001-200512'
-path_to = join('data', f"{model.format('')}")
-fn = join(path_to, 'TS.nc')
-data = xr.open_dataset(fn)[variable]
+model = 'f.e11.FAMIPC5CN'
+data = xr.open_dataset(f'/mnt/data/CESM1{model}/input/VARS.nc')[variable]
 model_name = data.coords['model'].values.tolist()
-
-# model_name = [f'ens{i:02d}' for i in range(1, 11)]
-# ens = np.load('data/ens1-10_network_preds_val.npy')
-# x = xr.DataArray(ens)
-# x = x.rename({'dim_0': 'model', 'dim_1': 'time', 
-#               'dim_2': 'lat', 'dim_3': 'lon'})
-# x = x.assign_coords(model=model_name, time=data.coords['time'][1306:1406],
-#                     lat=data.coords['lat'], lon=data.coords['lon'])
 
 y = data.to_numpy()
 z = y.reshape(10, -1).T
@@ -60,21 +49,32 @@ scaler = StandardScaler()
 scaler.fit(z)
 z = scaler.transform(z)
 
-pca = PCA()
+pca = PCA(n_components = 5)
 pca.fit(z)
-for i in pca.explained_variance_ratio_ * 100:
-    print(i)
+
+print(pd.DataFrame(pca.explained_variance_ratio_ * 100))
 
 x_new = pca.transform(z)
+col_names = [f'PC{i}' for i in range(1, pca.n_components + 1)]
+loadings = pd.DataFrame(pca.components_.T, columns=col_names, index=model_name)
+print(loadings)
+
 
 fig = plt.figure()
-myplot(x_new[:,0:2], np.transpose(pca.components_[0:2, :]),
-       model_name)
+myplot(x_new[:,0:2], np.transpose(pca.components_[0:2, :]), model_name)
 plt.tight_layout()
-fig.set_size_inches(10, 10)
-fig.savefig(f'figures/ensemble_pca.pdf', bbox_inches='tight')
+fig.set_size_inches(5, 5)
+fig.savefig(f'figures/ens_pca_{variable}.pdf', bbox_inches='tight')
 plt.close(fig)
 
 
 
+
+# model_name = [f'ens{i:02d}' for i in range(1, 11)]
+# ens = np.load('data/ens1-10_network_preds_val.npy')
+# x = xr.DataArray(ens)
+# x = x.rename({'dim_0': 'model', 'dim_1': 'time', 
+#               'dim_2': 'lat', 'dim_3': 'lon'})
+# x = x.assign_coords(model=model_name, time=data.coords['time'][1306:1406],
+#                     lat=data.coords['lat'], lon=data.coords['lon'])
 
