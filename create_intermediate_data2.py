@@ -8,6 +8,7 @@ ACF plot for ensembles
 Python script to create plots
 """
 
+from os import remove
 from os.path import join
 from os import makedirs as mkdir
 import xarray as xr
@@ -24,54 +25,59 @@ path_to = join(base_dir, model_short, 'input')
 path_from = base_dir
 mkdir(path_to, exist_ok=True)
 
-variables = ['TS', 'PRECC', 'PRECL', 'PS', 'PSL', 'UBOT', 'VBOT'] 
-vars = {v: None for v in variables}
-for v in variables:
+variables = ['TS', 'PRECC', 'PRECL', 'PS', 'PSL', 'UBOT', 'VBOT']
+for i, v in enumerate(variables):
     fn = join(path_from, v, f'{model}.nc')
     fn = fn.format('{}', f'.{v}')
-    data = [xr.open_dataset(fn.format(f'.{m}'))[v] for m in model_name]
+    data = [xr.open_dataset(fn.format(f'.{m}'), cache=False)[v] 
+            for m in model_name]
     data = xr.concat(data, dim='model')
     data = data.assign_coords(model=model_name)
     attrs = data.attrs
     if v == 'TS':
         data = data  - 272.15
         attrs['units'] = 'C'
+    if v == 'UBOT' or v == 'VBOT':
+        data = data.squeeze().drop('lev')
+    if v.startswith('PS'):
+        data = data / 100
+        attrs['units'] = 'hPa'
     data.coords['time'] = data.indexes['time'].to_datetimeindex()
     data.attrs = attrs
-    vars[v] = data
+    mode = 'w' if i == 0 else 'a'
+    data.to_netcdf(join(path_to, 'VARS.nc'),
+                   encoding={v: encoding}, mode=mode)
+del data
 
-# TOTAL PREC
-prect = vars['PRECC']+ vars['PRECL']
-prect.name = 'PRECT'
-vars['PRECT'] = prect
+with xr.open_dataset(join(path_to, 'VARS.nc'), cache=False) as ds:
+    prect = ds['PRECC'] + ds['PRECL']  # TOTAL PREC
+    prect.name = 'PRECT'
+    psl_ps = ds['PSL'] - ds['PS']  # PSL - PS
+    psl_ps.name = 'PSL_PS'
+prect.to_netcdf(join(path_to, 'VARS.nc'), 
+                encoding={'PRECT': encoding}, mode='a')
+psl_ps.to_netcdf(join(path_to, 'VARS.nc'),
+                 encoding={'PSL_PS': encoding}, mode='a')
+del prect, psl_ps
 
-# VARIABLES
-variables = ['TS', 'PRECC', 'PRECL', 'PRECT', 'PS', 'PSL', 'UBOT', 'VBOT']
-enc = {v: encoding for v in variables}
+# Create Means
+vars = xr.open_dataset(join(path_to, 'VARS.nc'), cache=False)
+for i, (k, d) in enumerate(vars.items()):
+    d = [d[indices != i].mean(axis=0) for i in indices]
+    d = xr.concat(d, dim='model')
+    d = d.assign_coords(model=model_name)
+    d.name = k
+    mode = 'w' if i == 0 else 'a'
+    d.to_netcdf(join(path_to, 'MEANS.nc'),
+                encoding={k: encoding}, mode=mode)
+del d
 
-vars = xr.merge(list(vars.values()))
-vars.to_netcdf(join(path_to, "VARS.nc"), encoding=enc)
-del data, prect
-
-# Means
-my_means = {v: None for v in variables}
-for v in variables:
-    data = vars[v]
-    means = [data[indices != i].mean(axis=0) for i in indices]
-    means = xr.concat(means, dim='model')
-    means = means.assign_coords(model=model_name)
-    means.name = v
-    my_means[v] = means
-
-means = xr.merge(list(my_means.values()))
-means.to_netcdf(join(path_to, "MEANS.nc"), encoding=enc)
-del data, my_means
 
 # Differences
+means = xr.open_dataset(join(path_to, 'MEANS.nc'))
 dif = means['TS'] - vars['TS']
-del means, vars
-dif.name = 'TS_dif'
-dif.to_netcdf(join(path_to, f"{dif.name}.nc"), 
+dif.name = 'dif_TS'
+dif.to_netcdf(join(path_to, f'{dif.name}.nc'), 
               encoding={dif.name: encoding})
 
 
