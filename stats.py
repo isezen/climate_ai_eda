@@ -52,11 +52,22 @@ def summary(x, axis=None):
         df.columns = stat_names
     return df
 
-variable = 'TS'
-model = 'f.e11.FAMIPC5CN.f09_f09.historical.toga.cam.h0.188001-200512'
-path_from = join('/', 'mnt', 'data', 'CESM1', model)
-fn = join(path_from, f'{variable}.nc')
-data = xr.open_dataarray(fn)
+
+model = 'f.e11.FAMIPC5CN'
+data_path = f'/mnt/data/CESM1/{model}'
+out_path = join(data_path, 'output')
+in_path = join(data_path, 'input')
+in_file = f'{in_path}/{{}}.nc'
+
+means = xr.open_dataset(in_file.format('MEANS'), cache=False)
+vars = xr.open_dataset(in_file.format('VARS'), cache=False)
+model_name = means.coords['model'].values.tolist()
+
+sm = {k: summary(v, axis=0) for k, v in vars.items()}
+
+dif = means['TS'] - ts
+summary(dif, axis=0)
+summary(abs(dif), axis=0)  # Max Error
 
 # Max Difference between ensembles
 max_dif = {n.coords['model'].values.tolist(): {m.coords['model'].values.tolist(): 
@@ -66,6 +77,6 @@ df_max_dif = pd.DataFrame(max_dif)
 
 # Summary
 summary(data)
-summary(data, axis=0)
+
 
         
