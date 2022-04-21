@@ -39,9 +39,9 @@ for i, v in enumerate(variables):
         attrs['units'] = 'C'
     if v == 'UBOT' or v == 'VBOT':
         data = data.squeeze().drop('lev')
-    if v.startswith('PS'):
-        data = data / 100
-        attrs['units'] = 'hPa'
+    # if v.startswith('PS'):
+    #     data = data / 100
+    #     attrs['units'] = 'hPa'
     data.coords['time'] = data.indexes['time'].to_datetimeindex()
     data.attrs = attrs
     mode = 'w' if i == 0 else 'a'
@@ -52,7 +52,7 @@ del data
 with xr.open_dataset(join(path_to, 'VARS.nc'), cache=False) as ds:
     prect = ds['PRECC'] + ds['PRECL']  # TOTAL PREC
     prect.name = 'PRECT'
-    psl_ps = ds['PSL'] - ds['PS']  # PSL - PS
+    psl_ps = (ds['PSL'] - ds['PS'])/100  # PSL - PS
     psl_ps.name = 'PSL_PS'
 prect.to_netcdf(join(path_to, 'VARS.nc'), 
                 encoding={'PRECT': encoding}, mode='a')
@@ -81,9 +81,3 @@ dif.to_netcdf(join(path_to, f'{dif.name}.nc'),
               encoding={dif.name: encoding})
 
 
-# ds =data.to_dataset()
-# encoding = {}
-# encoding_keys = ("_FillValue", "dtype", "scale_factor", "add_offset", "grid_mapping")
-# for data_var in ds.data_vars:
-#     encoding[data_var] = {key: value for key, value in ds[data_var].encoding.items() if key in encoding_keys}
-#     encoding[data_var].update(zlib=True, complevel=5)
